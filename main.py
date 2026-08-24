@@ -10,8 +10,10 @@ Pin mapping defaults (change to match your wiring):
 
 Behavior:
 - Use H+/H- and M+/M- to set hours and minutes while stopped.
-- START toggles running. RESET clears time to 00:00:00.
+- START toggles running. RESET clears to last-set or 00:00:00.
 - Short beep on any button press. Alarm beeps on timeout until any button pressed.
+- Dots (colon) blink each second between HH:MM and MM:SS.
+- The driver is instantiated with reverse_groups=True to support modules where each 3-digit block is reversed.
 """
 
 from machine import Pin
@@ -77,7 +79,8 @@ def secs_from_hms(h, m, s):
     return h*3600 + m*60 + s
 
 # Setup
-display = TM1367(clk_pin=CLK_PIN, dio_pin=DIO_PIN, brightness=4)
+# Note: set reverse_groups=True because the two 3-digit physical displays are mirrored on this hardware.
+display = TM1367(clk_pin=CLK_PIN, dio_pin=DIO_PIN, brightness=4, reverse_groups=True, group_size=3)
 buzzer = Buzzer(BUZZ_PIN)
 
 button_map = {
@@ -104,7 +107,11 @@ def update_display_from_remaining(rem):
     h = rem // 3600
     m = (rem % 3600) // 60
     s = rem % 60
-    display.show_time(h=h, m=m, s=s)
+    # create dots pattern: blink colon separators every second
+    dot_on = (s % 2) == 0
+    # we enable DP on digit positions 1 and 3 (after h2 and m2)
+    dots = [False, dot_on, False, dot_on, False, False]
+    display.show_time(h=h, m=m, s=s, dots=dots, suppress_leading=True)
 
 # main loop
 _alarm_pattern = [(1000, 150), (0, 100), (1500, 200), (0, 120)]  # (freq, ms) where freq=0 means silence
@@ -166,7 +173,7 @@ while True:
     elif state == 'alarm':
         # alarm pattern handled here (non-blocking)
         now = time.ticks_ms()
-        freq, dur = _alarm_pattern[_alarm_index]
+        freq, dur = _alarm_pattern[__alarm_index]
         if time.ticks_diff(now, _alarm_step_ts) >= dur:
             _alarm_index = (_alarm_index + 1) % len(_alarm_pattern)
             _alarm_step_ts = now
