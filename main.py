@@ -1,8 +1,7 @@
 """
-Main application for the Pico countdown timer (updated).
-- Fix alarm index bug
-- Add long-press auto-increment for H+/H-/M+/M-
-- Persist last_set to filesystem (/last_set.json)
+Main application for the Pico countdown timer (updated persistence behavior).
+- Persist last_set to filesystem 1 second after the last change to reduce flash wear
+- Long-press auto-repeat and alarm fix retained
 
 Pin mapping defaults (change to match your wiring):
 - TM1367 CLK: GP1
@@ -136,6 +135,10 @@ _hold_info = {
     'M-': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': 400, 'repeat_ms': 150},
 }
 
+# persistence throttle: save 1s after last change
+_last_set_dirty = False
+_last_set_changed_ts = 0
+
 print('Countdown started. Use buttons to set time and start. Loaded last_set:', last_set)
 
 # helper to update display
@@ -240,9 +243,16 @@ while True:
                         hi['last'] = now
                         changed = True
 
-    # if last_set changed, persist
+    # mark dirty when changed (defer saving to reduce flash wear)
     if changed:
+        _last_set_dirty = True
+        _last_set_changed_ts = now
+
+    # persist if dirty and 1s elapsed since last change
+    if _last_set_dirty and time.ticks_diff(now, _last_set_changed_ts) >= 1000:
         save_last_set(last_set)
+        _last_set_dirty = False
+        _last_set_changed_ts = 0
 
     # running logic: decrement once per second
     if state == 'running':
