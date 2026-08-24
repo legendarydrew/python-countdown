@@ -1,6 +1,8 @@
 """
-Main application for the Pico countdown timer.
-Buttons are polled with simple debounce logic. The display is driven via TM1367 (display_tm1367.py).
+Main application for the Pico countdown timer (updated).
+- Fix alarm index bug
+- Add long-press auto-increment for H+/H-/M+/M-
+- Persist last_set to filesystem (/last_set.json)
 
 Pin mapping defaults (change to match your wiring):
 - TM1367 CLK: GP1
@@ -9,15 +11,16 @@ Pin mapping defaults (change to match your wiring):
 - Buzzer: GP20
 
 Behavior:
-- Use H+/H- and M+/M- to set hours and minutes while stopped.
+- Use H+/H- and M+/M- to set hours and minutes while stopped. Hold to accelerate increments.
 - START toggles running. RESET clears to last-set or 00:00:00.
 - Short beep on any button press. Alarm beeps on timeout until any button pressed.
 - Dots (colon) blink each second between HH:MM and MM:SS.
-- The driver is instantiated with reverse_groups=True to support modules where each 3-digit block is reversed.
+- The driver is instantiated with reverse_groups=True to support mirrored 3-digit blocks.
 """
 
 from machine import Pin
 import time
+import ujson
 from display_tm1367 import TM1367
 from buzzer import Buzzer
 
@@ -31,6 +34,8 @@ BUTTON_M_DOWN = 17
 BUTTON_RESET = 18
 BUTTON_START = 19
 BUZZ_PIN = 20
+
+PERSIST_FILE = 'last_set.json'
 
 # debounce settings
 _DEBOUNCE_MS = 40
@@ -74,9 +79,33 @@ class DebouncedButtons:
                             events.append(('released', name))
         return events
 
+    def is_pressed(self, name):
+        """Return True if button "name" is currently pressed (active-low)."""
+        return self.stable_state.get(name, 1) == 0
+
 # utility
 def secs_from_hms(h, m, s):
     return h*3600 + m*60 + s
+
+# Persistence helpers
+def load_last_set():
+    try:
+        with open(PERSIST_FILE, 'r') as f:
+            data = ujson.loads(f.read())
+            h = int(data.get('h', 0))
+            m = int(data.get('m', 1))
+            s = int(data.get('s', 0))
+            return {'h': max(0, min(99, h)), 'm': max(0, min(59, m)), 's': max(0, min(59, s))}
+    except Exception:
+        return {'h': 0, 'm': 1, 's': 0}
+
+def save_last_set(s):
+    try:
+        with open(PERSIST_FILE, 'w') as f:
+            f.write(ujson.dumps(s))
+    except Exception:
+        # ignore write errors
+        pass
 
 # Setup
 # Note: set reverse_groups=True because the two 3-digit physical displays are mirrored on this hardware.
@@ -95,11 +124,19 @@ buttons = DebouncedButtons(button_map)
 
 # state
 state = 'idle'  # idle, running, alarm
-last_set = {'h':0, 'm':1, 's':0}  # default 00:01:00
+last_set = load_last_set()  # persisted
 remaining = secs_from_hms(**last_set)
 last_tick = time.ticks_ms()
 
-print('Countdown started. Use buttons to set time and start.')
+# hold/auto-repeat info for set buttons
+_hold_info = {
+    'H+': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': 400, 'repeat_ms': 150},
+    'H-': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': 400, 'repeat_ms': 150},
+    'M+': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': 400, 'repeat_ms': 150},
+    'M-': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': 400, 'repeat_ms': 150},
+}
+
+print('Countdown started. Use buttons to set time and start. Loaded last_set:', last_set)
 
 # helper to update display
 def update_display_from_remaining(rem):
@@ -109,7 +146,7 @@ def update_display_from_remaining(rem):
     s = rem % 60
     # create dots pattern: blink colon separators every second
     dot_on = (s % 2) == 0
-    # we enable DP on digit positions 1 and 3 (after h2 and m2)
+    # enable DP on digit positions 1 and 3 (after h2 and m2)
     dots = [False, dot_on, False, dot_on, False, False]
     display.show_time(h=h, m=m, s=s, dots=dots, suppress_leading=True)
 
@@ -119,8 +156,12 @@ _alarm_index = 0
 _alarm_step_ts = 0
 
 while True:
+    now = time.ticks_ms()
     # poll buttons
     evts = buttons.poll()
+
+    # handle events
+    changed = False
     for ev_type, name in evts:
         if ev_type == 'pressed':
             # beep on press
@@ -128,22 +169,33 @@ while True:
                 buzzer.beep(2000, 50)
             except Exception:
                 pass
+            # set hold info
+            if name in _hold_info:
+                hi = _hold_info[name]
+                hi['pressed'] = True
+                hi['start'] = now
+                hi['last'] = now
+            # immediate action on press
             if name == 'H+':
                 if state != 'running':
                     last_set['h'] = min(99, last_set['h'] + 1)
                     remaining = secs_from_hms(**last_set)
+                    changed = True
             elif name == 'H-':
                 if state != 'running':
                     last_set['h'] = max(0, last_set['h'] - 1)
                     remaining = secs_from_hms(**last_set)
+                    changed = True
             elif name == 'M+':
                 if state != 'running':
                     last_set['m'] = min(59, last_set['m'] + 1)
                     remaining = secs_from_hms(**last_set)
+                    changed = True
             elif name == 'M-':
                 if state != 'running':
                     last_set['m'] = max(0, last_set['m'] - 1)
                     remaining = secs_from_hms(**last_set)
+                    changed = True
             elif name == 'RESET':
                 # reset to last_set (or zero)
                 remaining = secs_from_hms(**last_set)
@@ -157,10 +209,43 @@ while True:
                     if remaining > 0:
                         state = 'running'
                         # align tick
-                        last_tick = time.ticks_ms()
+                        last_tick = now
+        elif ev_type == 'released':
+            # release hold info
+            if name in _hold_info:
+                hi = _hold_info[name]
+                hi['pressed'] = False
+                hi['start'] = 0
+                hi['last'] = 0
+
+    # auto-repeat handling for held set buttons (only when not running)
+    if state != 'running':
+        for name, hi in _hold_info.items():
+            if hi['pressed']:
+                elapsed = time.ticks_diff(now, hi['start'])
+                # if elapsed >= initial_delay, start repeating
+                if elapsed >= hi['initial_delay']:
+                    # if this is first repeat or enough time since last repeat
+                    if hi['last'] == hi['start'] or time.ticks_diff(now, hi['last']) >= hi['repeat_ms']:
+                        # perform action
+                        if name == 'H+':
+                            last_set['h'] = min(99, last_set['h'] + 1)
+                        elif name == 'H-':
+                            last_set['h'] = max(0, last_set['h'] - 1)
+                        elif name == 'M+':
+                            last_set['m'] = min(59, last_set['m'] + 1)
+                        elif name == 'M-':
+                            last_set['m'] = max(0, last_set['m'] - 1)
+                        remaining = secs_from_hms(**last_set)
+                        hi['last'] = now
+                        changed = True
+
+    # if last_set changed, persist
+    if changed:
+        save_last_set(last_set)
+
     # running logic: decrement once per second
     if state == 'running':
-        now = time.ticks_ms()
         if time.ticks_diff(now, last_tick) >= 1000:
             last_tick = now
             remaining -= 1
@@ -172,16 +257,23 @@ while True:
                 _alarm_step_ts = time.ticks_ms()
     elif state == 'alarm':
         # alarm pattern handled here (non-blocking)
-        now = time.ticks_ms()
-        freq, dur = _alarm_pattern[__alarm_index]
+        if _alarm_step_ts == 0:
+            _alarm_step_ts = now
+        freq, dur = _alarm_pattern[_alarm_index]
         if time.ticks_diff(now, _alarm_step_ts) >= dur:
             _alarm_index = (_alarm_index + 1) % len(_alarm_pattern)
             _alarm_step_ts = now
             freq, dur = _alarm_pattern[_alarm_index]
             if freq > 0:
-                buzzer._start_tone(freq)
+                try:
+                    buzzer._start_tone(freq)
+                except Exception:
+                    pass
             else:
-                buzzer._stop_tone()
+                try:
+                    buzzer._stop_tone()
+                except Exception:
+                    pass
         # any button press should silence alarm
         for ev_type, name in evts:
             if ev_type == 'pressed':
