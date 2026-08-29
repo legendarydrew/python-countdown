@@ -64,7 +64,7 @@ def try_init_buzzer(pin_no):
 
 def main():
     # Initialize display (assume available)
-    display = TM1367(clk_pin=config.CLK_PIN, dio_pin=config.DIO_PIN, brightness=config.DISPLAY_BRIGHTNESS)
+    display = TM1367(clk_pin=config.CLK_PIN, dio_pin=config.DIO_PIN, brightness=config.DISPLAY_BRIGHTNESS, reverse_groups=config.REVERSE_DISPLAY)
 
     # Prepare segment bytes for " TEST " on a 6-digit 7-seg:
     # T = 0x78, E = 0x79, S = 0x6d, blank = 0x00

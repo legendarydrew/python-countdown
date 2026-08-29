@@ -52,7 +52,7 @@ class DebouncedButtons:
                 self.last_change[name] = now
             else:
                 # raw stable since last_change?
-                if time.ticks_diff(now, self.last_change[name]) >= DEBOUNCE_MS:
+                if time.ticks_diff(now, self.last_change[name]) >= _DEBOUNCE_MS:
                     if v != self.stable_state[name]:
                         # stable state changed
                         prev = self.stable_state[name]
@@ -93,7 +93,7 @@ def save_last_set(s):
         pass
 
 # Setup
-display = TM1367(clk_pin=CLK_PIN, dio_pin=DIO_PIN, brightness=config.DISPLAY_BRIGHTNESS)
+display = TM1367(clk_pin=CLK_PIN, dio_pin=DIO_PIN, brightness=config.DISPLAY_BRIGHTNESS, reverse_groups=config.REVERSE_DISPLAY)
 buzzer = Buzzer(BUZZ_PIN)
 
 button_map = {
@@ -114,10 +114,10 @@ last_tick = time.ticks_ms()
 
 # hold/auto-repeat info for set buttons
 _hold_info = {
-    'H+': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': HOLD_INITIAL_DELAY_MS, 'repeat_ms': HOLD_REPEAT_MS},
-    'H-': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': HOLD_INITIAL_DELAY_MS, 'repeat_ms': HOLD_REPEAT_MS},
-    'M+': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': HOLD_INITIAL_DELAY_MS, 'repeat_ms': HOLD_REPEAT_MS},
-    'M-': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': HOLD_INITIAL_DELAY_MS, 'repeat_ms': HOLD_REPEAT_MS},
+    'H+': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': config.HOLD_INITIAL_DELAY_MS, 'repeat_ms': config.HOLD_REPEAT_MS},
+    'H-': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': config.HOLD_INITIAL_DELAY_MS, 'repeat_ms': config.HOLD_REPEAT_MS},
+    'M+': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': config.HOLD_INITIAL_DELAY_MS, 'repeat_ms': config.HOLD_REPEAT_MS},
+    'M-': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': config.HOLD_INITIAL_DELAY_MS, 'repeat_ms': config.HOLD_REPEAT_MS},
 }
 
 # persistence throttle: save PERSIST_DELAY_MS after last change
@@ -154,7 +154,7 @@ while True:
         if ev_type == 'pressed':
             # beep on press
             try:
-                buzzer.beep(BEEP_FREQ, BEEP_MS)
+                buzzer.beep(config.BUTTON_BEEP_FREQ, config.BUTTON_BEEP_MS)
             except Exception:
                 pass
             # set hold info
@@ -234,7 +234,7 @@ while True:
         _last_set_changed_ts = now
 
     # persist if dirty and PERSIST_DELAY_MS elapsed since last change
-    if _last_set_dirty and time.ticks_diff(now, _last_set_changed_ts) >= PERSIST_DELAY_MS:
+    if _last_set_dirty and time.ticks_diff(now, _last_set_changed_ts) >= config.PERSIST_DELAY_MS:
         save_last_set(last_set)
         _last_set_dirty = False
         _last_set_changed_ts = 0
