@@ -136,10 +136,10 @@ def update_display_from_remaining(rem):
     dot_on = (s % 2) == 0
     # enable DP on digit positions 1 and 3 (after h2 and m2)
     dots = [False, dot_on, False, dot_on, False, False]
-    display.show_time(h=h, m=m, s=s, dots=dots, suppress_leading=True)
+    display.show_time(h=h, m=m, s=s, dots=dots, suppress_leading=config.SUPRESS_LEADING_ZERO)
 
 # main loop
-_alarm_pattern = [(1000, 150), (0, 100), (1500, 200), (0, 120)]  # (freq, ms) where freq=0 means silence
+_alarm_pattern = config.ALARM_PATTERN
 _alarm_index = 0
 _alarm_step_ts = 0
 
