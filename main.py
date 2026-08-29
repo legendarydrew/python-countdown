@@ -1,66 +1,29 @@
 """
-Main application for the Pico countdown timer (expose tunable parameters at top).
-- Exposes top-level constants for debounce, hold delays, persistence delay, display options and buzzer settings
-- Persists last_set after PERSIST_DELAY_MS since the last change to reduce flash wear
-- Long-press auto-repeat and alarm fix retained
+Main application for the Pico countdown timer.
 
-Pin mapping defaults (change to match your wiring):
-- TM1367 CLK: GP1
-- TM1367 DIO: GP0
-- Buttons: GP14..GP19 (H+, H-, M+, M-, RESET, START)
-- Buzzer: GP20
-
-Behavior:
-- Use H+/H- and M+/M- to set hours and minutes while stopped. Hold to accelerate increments.
-- START toggles running. RESET clears to last-set or 00:00:00.
-- Short beep on any button press. Alarm beeps on timeout until any button pressed.
-- Dots (colon) blink each second between HH:MM and MM:SS.
-- The driver is instantiated with reverse_groups option for mirrored 3-digit modules.
+Pin mapping and display options are sourced from config.py so settings are shared
+with test_buttons.py.
 """
-
 from machine import Pin
 import time
 import ujson
 from display_tm1367 import TM1367
 from buzzer import Buzzer
+import config
 
-# --- Pin mapping ---
-CLK_PIN = 1
-DIO_PIN = 0
-BUTTON_H_UP = 2
-BUTTON_H_DOWN = 4
-BUTTON_M_UP = 5
-BUTTON_M_DOWN = 6
-BUTTON_RESET = 7
-BUTTON_START = 8
-BUZZ_PIN = 14
-# CLK_PIN = 1
-# DIO_PIN = 0
-# BUTTON_H_UP = 14
-# BUTTON_H_DOWN = 15
-# BUTTON_M_UP = 16
-# BUTTON_M_DOWN = 17
-# BUTTON_RESET = 18
-# BUTTON_START = 19
-# BUZZ_PIN = 20
+# --- Configurable pins (sourced from config.py) ---
+CLK_PIN = config.CLK_PIN
+DIO_PIN = config.DIO_PIN
+BUTTON_H_UP = config.BUTTON_H_UP
+BUTTON_H_DOWN = config.BUTTON_H_DOWN
+BUTTON_M_UP = config.BUTTON_M_UP
+BUTTON_M_DOWN = config.BUTTON_M_DOWN
+BUTTON_RESET = config.BUTTON_RESET
+BUTTON_START = config.BUTTON_START
+BUZZ_PIN = config.BUZZ_PIN
 
-PERSIST_FILE = 'last_set.json'
-
-# --- Tunable parameters (exposed for easy configuration) ---
-# Button debounce (ms)
-DEBOUNCE_MS = 40
-# Hold/auto-repeat timings for set buttons (ms)
-HOLD_INITIAL_DELAY_MS = 400
-HOLD_REPEAT_MS = 150
-# Persist delay: save last_set this many ms after the last change
-PERSIST_DELAY_MS = 1000
-# Display options
-BRIGHTNESS = 4
-REVERSE_GROUPS = True
-GROUP_SIZE = 3
-# Buzzer default beep settings
-BEEP_FREQ = 2000
-BEEP_MS = 50
+# debounce settings
+_DEBOUNCE_MS = config.DEBOUNCE_MS
 
 class DebouncedButtons:
     def __init__(self, pin_map):
@@ -130,8 +93,7 @@ def save_last_set(s):
         pass
 
 # Setup
-# Note: set reverse_groups according to your hardware (True for mirrored 3-digit blocks)
-display = TM1367(clk_pin=CLK_PIN, dio_pin=DIO_PIN, brightness=BRIGHTNESS, reverse_groups=REVERSE_GROUPS, group_size=GROUP_SIZE)
+display = TM1367(clk_pin=CLK_PIN, dio_pin=DIO_PIN, brightness=config.DISPLAY_BRIGHTNESS)
 buzzer = Buzzer(BUZZ_PIN)
 
 button_map = {

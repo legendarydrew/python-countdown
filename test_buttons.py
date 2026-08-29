@@ -22,14 +22,22 @@ Usage:
 from machine import Pin
 import time
 
+BUTTON_H_UP = 2
+BUTTON_H_DOWN = 4
+BUTTON_M_UP = 5
+BUTTON_M_DOWN = 6
+BUTTON_RESET = 7
+BUTTON_START = 8
+BUZZ_PIN = 14
+
 # default pin mapping (change if you wired differently)
-BUTTON_H_UP = 14
-BUTTON_H_DOWN = 15
-BUTTON_M_UP = 16
-BUTTON_M_DOWN = 17
-BUTTON_RESET = 18
-BUTTON_START = 19
-BUZZ_PIN = 20
+# BUTTON_H_UP = 14
+# BUTTON_H_DOWN = 15
+# BUTTON_M_UP = 16
+# BUTTON_M_DOWN = 17
+# BUTTON_RESET = 18
+# BUTTON_START = 19
+# BUZZ_PIN = 20
 
 _DEBOUNCE_MS = 40
 
