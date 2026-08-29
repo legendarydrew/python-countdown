@@ -176,9 +176,13 @@ class TM1367:
             # hours tens
             if h < 10:
                 digits[0] = ' '
+            if h == 0:
+                digits[1] = ' '
             # minutes tens
             if h == 0 and m < 10:
                 digits[2] = ' '
+            if h == 0 and m == 0:
+                digits[3] = ' '
             # seconds tens
             if h == 0 and m == 0 and s < 10:
                 digits[4] = ' '
