@@ -71,8 +71,10 @@ def main():
     segs = [0x00, 0x78, 0x79, 0x6d, 0x78, 0x00]
     try:
         display.show_raw(segs)
+        print("Display should show \" TEST \".")
     except Exception:
         # If display isn't actually connected this will simply fail; test still runs.
+        print("Could not use the display.")
         pass
 
     button_map = {
@@ -87,7 +89,7 @@ def main():
     buttons = DebouncedButtons(button_map)
     buzzer = try_init_buzzer(BUZZ_PIN)
 
-    print('Button test started. Display shows \" TEST \". Press each button and watch for events.')
+    print('Button test started. Press each button and watch for events.')
     if buzzer:
         print('Buzzer available: will beep on press.')
 
