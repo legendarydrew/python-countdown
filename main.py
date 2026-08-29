@@ -1,37 +1,28 @@
 """
 Main application for the Pico countdown timer.
-Buttons are polled with simple debounce logic. The display is driven via TM1367 (display_tm1367.py).
 
-Pin mapping defaults (change to match your wiring):
-- TM1367 CLK: GP1
-- TM1367 DIO: GP0
-- Buttons: GP14..GP19 (H+, H-, M+, M-, RESET, START)
-- Buzzer: GP20
-
-Behavior:
-- Use H+/H- and M+/M- to set hours and minutes while stopped.
-- START toggles running. RESET clears time to 00:00:00.
-- Short beep on any button press. Alarm beeps on timeout until any button pressed.
+Pin mapping and display options are sourced from config.py so settings are shared
+with test_buttons.py.
 """
-
 from machine import Pin
 import time
 from display_tm1367 import TM1367
 from buzzer import Buzzer
+import config
 
-# --- Configurable pins ---
-CLK_PIN = 1
-DIO_PIN = 0
-BUTTON_H_UP = 14
-BUTTON_H_DOWN = 15
-BUTTON_M_UP = 16
-BUTTON_M_DOWN = 17
-BUTTON_RESET = 18
-BUTTON_START = 19
-BUZZ_PIN = 20
+# --- Configurable pins (sourced from config.py) ---
+CLK_PIN = config.CLK_PIN
+DIO_PIN = config.DIO_PIN
+BUTTON_H_UP = config.BUTTON_H_UP
+BUTTON_H_DOWN = config.BUTTON_H_DOWN
+BUTTON_M_UP = config.BUTTON_M_UP
+BUTTON_M_DOWN = config.BUTTON_M_DOWN
+BUTTON_RESET = config.BUTTON_RESET
+BUTTON_START = config.BUTTON_START
+BUZZ_PIN = config.BUZZ_PIN
 
 # debounce settings
-_DEBOUNCE_MS = 40
+_DEBOUNCE_MS = config.DEBOUNCE_MS
 
 class DebouncedButtons:
     def __init__(self, pin_map):
@@ -77,7 +68,7 @@ def secs_from_hms(h, m, s):
     return h*3600 + m*60 + s
 
 # Setup
-display = TM1367(clk_pin=CLK_PIN, dio_pin=DIO_PIN, brightness=4)
+display = TM1367(clk_pin=CLK_PIN, dio_pin=DIO_PIN, brightness=config.DISPLAY_BRIGHTNESS)
 buzzer = Buzzer(BUZZ_PIN)
 
 button_map = {
