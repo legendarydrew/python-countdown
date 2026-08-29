@@ -1,6 +1,7 @@
 """
-Main application for the Pico countdown timer (updated persistence behavior).
-- Persist last_set to filesystem 1 second after the last change to reduce flash wear
+Main application for the Pico countdown timer (expose tunable parameters at top).
+- Exposes top-level constants for debounce, hold delays, persistence delay, display options and buzzer settings
+- Persists last_set after PERSIST_DELAY_MS since the last change to reduce flash wear
 - Long-press auto-repeat and alarm fix retained
 
 Pin mapping defaults (change to match your wiring):
@@ -14,7 +15,7 @@ Behavior:
 - START toggles running. RESET clears to last-set or 00:00:00.
 - Short beep on any button press. Alarm beeps on timeout until any button pressed.
 - Dots (colon) blink each second between HH:MM and MM:SS.
-- The driver is instantiated with reverse_groups=True to support mirrored 3-digit blocks.
+- The driver is instantiated with reverse_groups option for mirrored 3-digit modules.
 """
 
 from machine import Pin
@@ -23,7 +24,7 @@ import ujson
 from display_tm1367 import TM1367
 from buzzer import Buzzer
 
-# --- Configurable pins ---
+# --- Pin mapping ---
 CLK_PIN = 1
 DIO_PIN = 0
 BUTTON_H_UP = 2
@@ -45,8 +46,21 @@ BUZZ_PIN = 14
 
 PERSIST_FILE = 'last_set.json'
 
-# debounce settings
-_DEBOUNCE_MS = 40
+# --- Tunable parameters (exposed for easy configuration) ---
+# Button debounce (ms)
+DEBOUNCE_MS = 40
+# Hold/auto-repeat timings for set buttons (ms)
+HOLD_INITIAL_DELAY_MS = 400
+HOLD_REPEAT_MS = 150
+# Persist delay: save last_set this many ms after the last change
+PERSIST_DELAY_MS = 1000
+# Display options
+BRIGHTNESS = 4
+REVERSE_GROUPS = True
+GROUP_SIZE = 3
+# Buzzer default beep settings
+BEEP_FREQ = 2000
+BEEP_MS = 50
 
 class DebouncedButtons:
     def __init__(self, pin_map):
@@ -75,7 +89,7 @@ class DebouncedButtons:
                 self.last_change[name] = now
             else:
                 # raw stable since last_change?
-                if time.ticks_diff(now, self.last_change[name]) >= _DEBOUNCE_MS:
+                if time.ticks_diff(now, self.last_change[name]) >= DEBOUNCE_MS:
                     if v != self.stable_state[name]:
                         # stable state changed
                         prev = self.stable_state[name]
@@ -116,8 +130,8 @@ def save_last_set(s):
         pass
 
 # Setup
-# Note: set reverse_groups=True because the two 3-digit physical displays are mirrored on this hardware.
-display = TM1367(clk_pin=CLK_PIN, dio_pin=DIO_PIN, brightness=4, reverse_groups=True, group_size=3)
+# Note: set reverse_groups according to your hardware (True for mirrored 3-digit blocks)
+display = TM1367(clk_pin=CLK_PIN, dio_pin=DIO_PIN, brightness=BRIGHTNESS, reverse_groups=REVERSE_GROUPS, group_size=GROUP_SIZE)
 buzzer = Buzzer(BUZZ_PIN)
 
 button_map = {
@@ -138,13 +152,13 @@ last_tick = time.ticks_ms()
 
 # hold/auto-repeat info for set buttons
 _hold_info = {
-    'H+': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': 400, 'repeat_ms': 150},
-    'H-': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': 400, 'repeat_ms': 150},
-    'M+': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': 400, 'repeat_ms': 150},
-    'M-': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': 400, 'repeat_ms': 150},
+    'H+': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': HOLD_INITIAL_DELAY_MS, 'repeat_ms': HOLD_REPEAT_MS},
+    'H-': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': HOLD_INITIAL_DELAY_MS, 'repeat_ms': HOLD_REPEAT_MS},
+    'M+': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': HOLD_INITIAL_DELAY_MS, 'repeat_ms': HOLD_REPEAT_MS},
+    'M-': {'pressed': False, 'start': 0, 'last': 0, 'initial_delay': HOLD_INITIAL_DELAY_MS, 'repeat_ms': HOLD_REPEAT_MS},
 }
 
-# persistence throttle: save 1s after last change
+# persistence throttle: save PERSIST_DELAY_MS after last change
 _last_set_dirty = False
 _last_set_changed_ts = 0
 
@@ -178,7 +192,7 @@ while True:
         if ev_type == 'pressed':
             # beep on press
             try:
-                buzzer.beep(2000, 50)
+                buzzer.beep(BEEP_FREQ, BEEP_MS)
             except Exception:
                 pass
             # set hold info
@@ -257,8 +271,8 @@ while True:
         _last_set_dirty = True
         _last_set_changed_ts = now
 
-    # persist if dirty and 1s elapsed since last change
-    if _last_set_dirty and time.ticks_diff(now, _last_set_changed_ts) >= 1000:
+    # persist if dirty and PERSIST_DELAY_MS elapsed since last change
+    if _last_set_dirty and time.ticks_diff(now, _last_set_changed_ts) >= PERSIST_DELAY_MS:
         save_last_set(last_set)
         _last_set_dirty = False
         _last_set_changed_ts = 0
